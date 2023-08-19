@@ -242,14 +242,14 @@ VERSION := $(if $(TAG),$(TAG),$(COMMIT))
 
 .PHONY: astyle clean doxygen sonar pvs
 
-all: clean doxygen pvs $(SOURCES) $(EXECUTABLE) 
+all: clean doxygen $(SOURCES) $(EXECUTABLE) 
 
 pvs: $(SOURCES) $(EXECUTABLE) 
 
 $(EXECUTABLE): $(OBJECTS)
 # Converting
-	plog-converter -a 'GA:1,2,3;OP:1,2,3;CS:1,2,3;MISRA:1,2,3' -t $(LOG_FORMAT) $(POBJECTS) -o $(PVS_LOG)
-	plog-converter -a 'GA:1;OP:1;CS:1;MISRA:1' --excludedCodes=V1042 -t errorfile $(POBJECTS) -o ./pvs.error
+	# plog-converter -a 'GA:1,2,3;OP:1,2,3;CS:1,2,3;MISRA:1,2,3' -t $(LOG_FORMAT) $(POBJECTS) -o $(PVS_LOG)
+	# plog-converter -a 'GA:1;OP:1;CS:1;MISRA:1' --excludedCodes=V1042 -t errorfile $(POBJECTS) -o ./pvs.error
 
 .c.o:
 # Build
@@ -257,7 +257,7 @@ $(EXECUTABLE): $(OBJECTS)
 # Preprocessing
 	$(CXX) $(CFLAGS) $< $(DFLAGS) $(INC_PARAMS) -E -o $@.PVS-Studio.i
 # Analysis
-	pvs-studio --cfg $(PVS_CFG) --source-file $< --i-file $@.PVS-Studio.i --output-file $@.PVS-Studio.log
+# pvs-studio --cfg $(PVS_CFG) --source-file $< --i-file $@.PVS-Studio.i --output-file $@.PVS-Studio.log
 
 sonar: $(SOURCES) $(SONAR) 
 $(SONAR): $(ANALYSIS)

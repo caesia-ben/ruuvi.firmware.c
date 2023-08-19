@@ -32,6 +32,12 @@
 #define APP_DF_8_ENABLED 0
 #define APP_DF_FA_ENABLED 0
 
+static uint32_t heartbeat_interval_dynamic_ms;
+
+static int64_t last_accelerometer_active_time_ms;
+
+static int64_t last_led_flash_ms;
+
 static ri_timer_id_t heart_timer; //!< Timer for updating data.
 
 static uint64_t last_heartbeat_timestamp_ms; //!< Timestamp for heartbeat refresh.
@@ -72,6 +78,17 @@ static rd_status_t send_adv (ri_comm_message_t * const p_msg)
     return err_code;
 }
 
+static void check_accel_is_active(rd_sensor_data_t *const data) {
+
+    float x = rd_sensor_data_parse (data, RD_SENSOR_ACC_X_FIELD);
+    float y = rd_sensor_data_parse (data, RD_SENSOR_ACC_Y_FIELD);
+    float z = rd_sensor_data_parse (data, RD_SENSOR_ACC_Z_FIELD);
+
+    if (x > 1.5f || y > 1.5f || z > 1.5f) {
+        last_accelerometer_active_time_ms = ri_rtc_millis();
+    }
+}
+
 /**
  * @brief When timer triggers, schedule reading sensors and sending data.
  *
@@ -92,7 +109,10 @@ void heartbeat (void * p_event, uint16_t event_size)
     data.data = data_values;
     app_sensor_get (&data);
     // Sensor read takes a long while, indicate activity once data is read.
-    app_led_activity_signal (true);
+    if ((last_led_flash_ms + 1950) < ri_rtc_millis()) {
+        last_led_flash_ms = ri_rtc_millis();
+        app_led_activity_signal (true);
+    }
     m_dataformat_state = app_dataformat_next (m_dataformats_enabled, m_dataformat_state);
     app_dataformat_encode (msg.data, &buffer_len, &data, m_dataformat_state);
     msg.data_length = (uint8_t) buffer_len;
@@ -131,9 +151,24 @@ void heartbeat (void * p_event, uint16_t event_size)
         last_heartbeat_timestamp_ms = ri_rtc_millis();
     }
 
+    check_accel_is_active(&data);
+    uint32_t new_heartbeat_interval_ms;
+    if ((last_accelerometer_active_time_ms + (1000 * 60 * 10)) > ri_rtc_millis()) {
+        new_heartbeat_interval_ms = 100;
+    }
+    else {
+        new_heartbeat_interval_ms = APP_HEARTBEAT_INTERVAL_MS;
+    }
+
+    if (new_heartbeat_interval_ms != heartbeat_interval_dynamic_ms) {
+        heartbeat_interval_dynamic_ms = new_heartbeat_interval_ms;
+        ri_timer_stop (heart_timer);
+        ri_timer_start (heart_timer, heartbeat_interval_dynamic_ms, NULL);
+    }
+
     // Turn LED off before starting lengthy flash operations
     app_led_activity_signal (false);
-    err_code = app_log_process (&data);
+    // err_code = app_log_process (&data);
     RD_ERROR_CHECK (err_code, ~RD_ERROR_FATAL);
 }
 
@@ -153,6 +188,9 @@ void schedule_heartbeat_isr (void * const p_context)
 rd_status_t app_heartbeat_init (void)
 {
     rd_status_t err_code = RD_SUCCESS;
+    heartbeat_interval_dynamic_ms = APP_HEARTBEAT_INTERVAL_MS;
+    last_accelerometer_active_time_ms = -1 * (1000 * 60 * 9);
+    last_led_flash_ms = ri_rtc_millis();
 
     if ( (!ri_timer_is_init()) || (!ri_scheduler_is_init()))
     {
@@ -165,7 +203,7 @@ rd_status_t app_heartbeat_init (void)
 
         if (RD_SUCCESS == err_code)
         {
-            err_code |= ri_timer_start (heart_timer, APP_HEARTBEAT_INTERVAL_MS, NULL);
+            err_code |= ri_timer_start (heart_timer, heartbeat_interval_dynamic_ms, NULL);
         }
     }
 
@@ -183,7 +221,7 @@ rd_status_t app_heartbeat_start (void)
     else
     {
         heartbeat (NULL, 0);
-        err_code |= ri_timer_start (heart_timer, APP_HEARTBEAT_INTERVAL_MS, NULL);
+        err_code |= ri_timer_start (heart_timer, heartbeat_interval_dynamic_ms, NULL);
     }
 
     return err_code;
