@@ -13,14 +13,6 @@
 #ifndef APPLICATION_MODES_H
 #define APPLICATION_MODES_H
 
-#ifdef APPLICATION_MODE_LONGLIFE
-#include "application_mode_longlife.h"
-#elif APPLICATION_MODE_LONGMEM
-#include "application_mode_longmem.h"
-#elif DEBUG
-#include "application_mode_debug.h"
-#endif
-
 #include "application_mode_default.h"   // always add in the Default settings (perhaps superceeded by above)
 
 #endif  //  APPLICATION_MODES_H

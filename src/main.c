@@ -116,7 +116,9 @@ int main (void)
         // Sleep - woken up on event
         // Do not indicate activity here to conserve power.
         // Sensor reads take ~20ms, having led on for that time is expensive.
-        ri_yield();
+        if (app_heartbeat_should_sleep()) {
+            ri_yield();
+        }
         // Prevent loop being optimized away
         __asm__ ("");
     } while (LOOP_FOREVER);

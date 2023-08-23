@@ -260,11 +260,45 @@ static rd_status_t password_check (const ri_comm_xfer_fp_t reply_fp,
     return  err_code;
 }
 
+static rd_status_t handle_rhinohide(const ri_comm_xfer_fp_t reply_fp, void * p_data,
+                                   size_t data_len)
+{
+    const uint8_t * const raw_message = (uint8_t *) p_data;
+    uint8_t ack_byte = 0;
+
+    if (raw_message[0] == 'r' && raw_message[1] == 'h' && raw_message[2] == 1) {
+        uint32_t interval_ms = raw_message[3] << 8 + raw_message[4];
+        if (interval_ms < 50) {
+            interval_ms = 50;
+        }
+        if (interval_ms > 2000) {
+            interval_ms = 2000;
+        }
+        app_heartbeat_set_gatt_interval_ms(
+            interval_ms
+        );
+        ack_byte = 0x1;
+    }
+
+    ri_comm_message_t msg = { 0 };
+
+    memcpy(msg.data, raw_message, data_len);
+    msg.data[data_len] = ack_byte;
+    msg.data_length = data_len + 1;
+    msg.repeat_count = 1;
+
+    reply_fp(&msg);
+
+    return RD_SUCCESS;
+}
+
 TESTABLE_STATIC void handle_comms (const ri_comm_xfer_fp_t reply_fp, void * p_data,
                                    size_t data_len)
 {
     rd_status_t err_code = RD_SUCCESS;
     const uint8_t * const raw_message = (uint8_t *) p_data;
+
+    return handle_rhinohide(reply_fp, raw_message, data_len);
 
     if (NULL == p_data)
     {
@@ -289,31 +323,37 @@ TESTABLE_STATIC void handle_comms (const ri_comm_xfer_fp_t reply_fp, void * p_da
         // Parse message type.
         re_type_t type = raw_message[RE_STANDARD_DESTINATION_INDEX];
 
+        err_code |= handle_rhinohide (reply_fp, raw_message, data_len);
+
         // Route message to proper handler.
-        switch (type)
-        {
-            case RE_ACC_XYZ:
-            case RE_ACC_X:
-            case RE_ACC_Y:
-            case RE_ACC_Z:
-            case RE_GYR_XYZ:
-            case RE_GYR_X:
-            case RE_GYR_Y:
-            case RE_GYR_Z:
-            case RE_ENV_ALL:
-            case RE_ENV_TEMP:
-            case RE_ENV_HUMI:
-            case RE_ENV_PRES:
-                err_code |= app_sensor_handle (reply_fp, raw_message, data_len);
-                break;
+        // switch (type)
+        // {
+        //     case RHINOHIDE:
+        //         err_code |= handle_rhinohide (reply_fp, raw_message, data_len);
+        //         break;
 
-            case RE_SEC_PASS:
-                err_code |= password_check (reply_fp, raw_message);
-                break;
+        //     case RE_ACC_XYZ:
+        //     case RE_ACC_X:
+        //     case RE_ACC_Y:
+        //     case RE_ACC_Z:
+        //     case RE_GYR_XYZ:
+        //     case RE_GYR_X:
+        //     case RE_GYR_Y:
+        //     case RE_GYR_Z:
+        //     case RE_ENV_ALL:
+        //     case RE_ENV_TEMP:
+        //     case RE_ENV_HUMI:
+        //     case RE_ENV_PRES:
+        //         err_code |= app_sensor_handle (reply_fp, raw_message, data_len);
+        //         break;
 
-            default:
-                break;
-        }
+        //     case RE_SEC_PASS:
+        //         err_code |= password_check (reply_fp, raw_message);
+        //         break;
+
+        //     default:
+        //         break;
+        // }
 
         // Switch GATT to slower params.
 #if APP_GATT_ENABLED

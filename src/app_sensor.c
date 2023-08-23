@@ -125,27 +125,27 @@ static
 void
 m_sensors_init (void)
 {
-#if APP_SENSOR_TMP117_ENABLED
-    m_sensors[TMP117_INDEX] = &tmp117;
-#endif
-#if APP_SENSOR_SHTCX_ENABLED
-    m_sensors[SHTCX_INDEX] = &shtcx;
-#endif
-#if APP_SENSOR_DPS310_ENABLED
-    m_sensors[DPS310_INDEX] = &dps310;
-#endif
-#if APP_SENSOR_BME280_ENABLED
-    m_sensors[BME280_INDEX] = &bme280;
-#endif
-#if APP_SENSOR_NTC_ENABLED
-    m_sensors[NTC_INDEX] = &ntc;
-#endif
-#if APP_SENSOR_PHOTO_ENABLED
-    m_sensors[PHOTO_INDEX] = &photo;
-#endif
-#if APP_SENSOR_ENVIRONMENTAL_MCU_ENABLED
-    m_sensors[ENV_MCU_INDEX] = &env_mcu;
-#endif
+// #if APP_SENSOR_TMP117_ENABLED
+//     m_sensors[TMP117_INDEX] = &tmp117;
+// #endif
+// #if APP_SENSOR_SHTCX_ENABLED
+//     m_sensors[SHTCX_INDEX] = &shtcx;
+// #endif
+// #if APP_SENSOR_DPS310_ENABLED
+//     m_sensors[DPS310_INDEX] = &dps310;
+// #endif
+// #if APP_SENSOR_BME280_ENABLED
+//     m_sensors[BME280_INDEX] = &bme280;
+// #endif
+// #if APP_SENSOR_NTC_ENABLED
+//     m_sensors[NTC_INDEX] = &ntc;
+// #endif
+// #if APP_SENSOR_PHOTO_ENABLED
+//     m_sensors[PHOTO_INDEX] = &photo;
+// #endif
+// #if APP_SENSOR_ENVIRONMENTAL_MCU_ENABLED
+//     m_sensors[ENV_MCU_INDEX] = &env_mcu;
+// #endif
 #if APP_SENSOR_LIS2DH12_ENABLED
     m_sensors[LIS2DH12_INDEX] = &lis2dh12;
 #endif

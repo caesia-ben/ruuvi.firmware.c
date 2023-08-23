@@ -21,6 +21,9 @@
 #define APP_FW_VARIANT "+rhino"
 #endif
 
+// #define RUUVI_NRF5_SDK15_UART_ENABLED   (1)
+#define RT_GATT_ENABLED 1
+
 /** @brief Communicate sensor data at this interval. 1285 matches Apple guideline. */
 #ifndef APP_BLE_INTERVAL_MS
 #   define APP_BLE_INTERVAL_MS (1285U)

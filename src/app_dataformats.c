@@ -87,6 +87,8 @@ encode_to_3 (uint8_t * const output,
 }
 #endif
 
+extern uint8_t* rt_gatt_get_stats(void);
+
 #if RE_5_ENABLED
 TESTABLE_STATIC rd_status_t
 encode_to_5 (uint8_t * const output,
@@ -112,6 +114,8 @@ encode_to_5 (uint8_t * const output,
     err_code |= ri_adv_tx_power_get (&ep_data.tx_power);
     err_code |= rt_adc_vdd_get (&ep_data.battery_v);
     enc_code |= re_5_encode (output, &ep_data);
+
+    memcpy(&output[1], rt_gatt_get_stats(), 5);
 
     if (RE_SUCCESS != enc_code)
     {

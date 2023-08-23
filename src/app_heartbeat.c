@@ -32,7 +32,9 @@
 #define APP_DF_8_ENABLED 0
 #define APP_DF_FA_ENABLED 0
 
-static uint32_t heartbeat_interval_dynamic_ms;
+static uint32_t heartbeat_gatt_interval_dynamic_ms;
+static uint32_t heartbeat_interval_ms;
+static int64_t heartbeat_gatt_live_until = 0;
 
 static int64_t last_accelerometer_active_time_ms;
 
@@ -99,6 +101,7 @@ static
 #endif
 void heartbeat (void * p_event, uint16_t event_size)
 {
+    bool gatt_active = false;
     ri_comm_message_t msg = {0};
     rd_status_t err_code = RD_SUCCESS;
     bool heartbeat_ok = false;
@@ -108,17 +111,17 @@ void heartbeat (void * p_event, uint16_t event_size)
     float data_values[rd_sensor_data_fieldcount (&data)];
     data.data = data_values;
     app_sensor_get (&data);
+    m_dataformat_state = app_dataformat_next (m_dataformats_enabled, m_dataformat_state);
+    app_dataformat_encode (msg.data, &buffer_len, &data, m_dataformat_state);
+    msg.data_length = (uint8_t) buffer_len;
     // Sensor read takes a long while, indicate activity once data is read.
     if ((last_led_flash_ms + 1950) < ri_rtc_millis()) {
         last_led_flash_ms = ri_rtc_millis();
         app_led_activity_signal (true);
+        err_code = send_adv (&msg);
+        // Advertising should always be successful
+        RD_ERROR_CHECK (err_code, ~RD_ERROR_FATAL);
     }
-    m_dataformat_state = app_dataformat_next (m_dataformats_enabled, m_dataformat_state);
-    app_dataformat_encode (msg.data, &buffer_len, &data, m_dataformat_state);
-    msg.data_length = (uint8_t) buffer_len;
-    err_code = send_adv (&msg);
-    // Advertising should always be successful
-    RD_ERROR_CHECK (err_code, ~RD_ERROR_FATAL);
 
     if (RD_SUCCESS == err_code)
     {
@@ -129,16 +132,19 @@ void heartbeat (void * p_event, uint16_t event_size)
     msg.data_length = 18;
     // Gatt Link layer takes care of delivery.
     msg.repeat_count = 1;
-    err_code = rt_gatt_send_asynchronous (&msg);
+    // err_code = app_comms_blocking_send (rt_gatt_send_asynchronous, &msg);
+    err_code = rt_gatt_send_asynchronous(&msg);
 
     if (RD_SUCCESS == err_code)
     {
         heartbeat_ok = true;
     }
 
+    gatt_active = err_code == RD_SUCCESS;
+
     // Restore original message length for NFC
     msg.data_length = (uint8_t) buffer_len;
-    err_code = rt_nfc_send (&msg);
+    // err_code = rt_nfc_send (&msg);
 
     if (RD_SUCCESS == err_code)
     {
@@ -151,20 +157,20 @@ void heartbeat (void * p_event, uint16_t event_size)
         last_heartbeat_timestamp_ms = ri_rtc_millis();
     }
 
-    check_accel_is_active(&data);
-    uint32_t new_heartbeat_interval_ms;
-    if ((last_accelerometer_active_time_ms + (1000 * 60 * 10)) > ri_rtc_millis()) {
-        new_heartbeat_interval_ms = 100;
-    }
-    else {
-        new_heartbeat_interval_ms = APP_HEARTBEAT_INTERVAL_MS;
-    }
+    // check_accel_is_active(&data);
+    // uint32_t new_heartbeat_interval_ms;
+    // if (gatt_active) {
+    //     new_heartbeat_interval_ms = heartbeat_gatt_interval_dynamic_ms;
+    // }
+    // else {
+    //     new_heartbeat_interval_ms = APP_HEARTBEAT_INTERVAL_MS;
+    // }
 
-    if (new_heartbeat_interval_ms != heartbeat_interval_dynamic_ms) {
-        heartbeat_interval_dynamic_ms = new_heartbeat_interval_ms;
-        ri_timer_stop (heart_timer);
-        ri_timer_start (heart_timer, heartbeat_interval_dynamic_ms, NULL);
-    }
+    // if (heartbeat_interval_ms != new_heartbeat_interval_ms) {
+    //     heartbeat_interval_ms = new_heartbeat_interval_ms;
+    //     ri_timer_stop (heart_timer);
+    //     ri_timer_start (heart_timer, heartbeat_interval_ms, NULL);
+    // }
 
     // Turn LED off before starting lengthy flash operations
     app_led_activity_signal (false);
@@ -185,10 +191,18 @@ void schedule_heartbeat_isr (void * const p_context)
     ri_scheduler_event_put (NULL, 0U, &heartbeat);
 }
 
+rd_status_t app_heartbeat_set_gatt_interval_ms(uint32_t interval_ms) {
+
+    heartbeat_gatt_interval_dynamic_ms = interval_ms;
+    heartbeat_gatt_live_until = 60000 + ri_rtc_millis();
+    return RD_SUCCESS;
+}
+
 rd_status_t app_heartbeat_init (void)
 {
     rd_status_t err_code = RD_SUCCESS;
-    heartbeat_interval_dynamic_ms = APP_HEARTBEAT_INTERVAL_MS;
+    heartbeat_interval_ms = APP_HEARTBEAT_INTERVAL_MS;
+    heartbeat_gatt_interval_dynamic_ms = APP_HEARTBEAT_INTERVAL_MS;
     last_accelerometer_active_time_ms = -1 * (1000 * 60 * 9);
     last_led_flash_ms = ri_rtc_millis();
 
@@ -203,11 +217,19 @@ rd_status_t app_heartbeat_init (void)
 
         if (RD_SUCCESS == err_code)
         {
-            err_code |= ri_timer_start (heart_timer, heartbeat_interval_dynamic_ms, NULL);
+            err_code |= ri_timer_start (heart_timer, heartbeat_interval_ms, NULL);
         }
     }
 
     return err_code;
+}
+
+bool app_heartbeat_should_sleep (void) {
+    if (heartbeat_gatt_live_until > ri_rtc_millis()) {
+        return true;
+    } else {
+        heartbeat (NULL, 0);
+    }
 }
 
 rd_status_t app_heartbeat_start (void)
@@ -221,7 +243,7 @@ rd_status_t app_heartbeat_start (void)
     else
     {
         heartbeat (NULL, 0);
-        err_code |= ri_timer_start (heart_timer, heartbeat_interval_dynamic_ms, NULL);
+        err_code |= ri_timer_start (heart_timer, heartbeat_interval_ms, NULL);
     }
 
     return err_code;

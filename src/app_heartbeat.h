@@ -65,6 +65,8 @@ rd_status_t app_heartbeat_stop (void);
  */
 bool app_heartbeat_overdue (void);
 
+rd_status_t app_heartbeat_set_gatt_interval_ms(uint32_t interval_ms);
+bool app_heartbeat_should_sleep (void);
 
 #ifdef CEEDLING
 #include "ruuvi_interface_timer.h"
