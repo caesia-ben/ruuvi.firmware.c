@@ -7,6 +7,7 @@
 #include "ruuvi_endpoint_fa.h"
 #include "ruuvi_interface_aes.h"
 #include "ruuvi_interface_communication_ble_advertising.h"
+#include "ruuvi_interface_rtc.h"
 #include "ruuvi_interface_communication_radio.h"
 #include "ruuvi_interface_communication.h"
 #include "ruuvi_task_adc.h"
@@ -19,6 +20,8 @@
 #else
 #   define TESTABLE_STATIC static
 #endif
+
+uint8_t sequence_no = 0;
 
 #if (RE_8_ENABLED || RE_FA_ENABLED)
 uint32_t app_data_encrypt (const uint8_t * const cleartext,
@@ -89,6 +92,10 @@ encode_to_3 (uint8_t * const output,
 
 extern uint8_t* rt_gatt_get_stats(void);
 
+extern uint8_t rt_gatt_get_gatt_send_errors(void);
+
+extern uint32_t rt_gatt_get_last_err(void);
+
 #if RE_5_ENABLED
 TESTABLE_STATIC rd_status_t
 encode_to_5 (uint8_t * const output,
@@ -115,7 +122,21 @@ encode_to_5 (uint8_t * const output,
     err_code |= rt_adc_vdd_get (&ep_data.battery_v);
     enc_code |= re_5_encode (output, &ep_data);
 
-    memcpy(&output[1], rt_gatt_get_stats(), 5);
+    uint64_t millis = ri_rtc_millis();
+    uint32_t last_err = rt_gatt_get_last_err();
+    output[1] = rt_gatt_get_stats()[2];
+    // output[2] = millis >> 32;
+    // output[2] = (millis >> 24) & 0xff;
+    // output[3] = (millis >> 16) & 0xff;
+    output[2] = rt_gatt_get_gatt_send_errors();
+    output[3] = 0;
+    output[4] = (millis >> 8) & 0xff;
+    output[5] = millis & 0xff;
+    output[6] = sequence_no++;
+    output[13] = (last_err >> 24) & 0xff;
+    output[14] = (last_err >> 16) & 0xff;
+    output[15] = (last_err >> 8) & 0xff;
+    output[16] = (last_err) & 0xff;
 
     if (RE_SUCCESS != enc_code)
     {

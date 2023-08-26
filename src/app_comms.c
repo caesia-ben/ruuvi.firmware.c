@@ -267,9 +267,9 @@ static rd_status_t handle_rhinohide(const ri_comm_xfer_fp_t reply_fp, void * p_d
     uint8_t ack_byte = 0;
 
     if (raw_message[0] == 'r' && raw_message[1] == 'h' && raw_message[2] == 1) {
-        uint32_t interval_ms = raw_message[3] << 8 + raw_message[4];
-        if (interval_ms < 50) {
-            interval_ms = 50;
+        uint32_t interval_ms = (0xff00 & (raw_message[3] << 8)) + (0xff & (raw_message[4]));
+        if (interval_ms < 5) {
+            interval_ms = 5;
         }
         if (interval_ms > 2000) {
             interval_ms = 2000;

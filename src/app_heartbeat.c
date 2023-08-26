@@ -9,7 +9,6 @@
 #include "app_comms.h"
 #include "app_dataformats.h"
 #include "app_heartbeat.h"
-#include "app_led.h"
 #include "app_log.h"
 #include "app_sensor.h"
 #include "ruuvi_driver_error.h"
@@ -37,6 +36,9 @@ static uint32_t heartbeat_interval_ms;
 static int64_t heartbeat_gatt_live_until = 0;
 
 static int64_t last_accelerometer_active_time_ms;
+
+static int64_t last_hb_ms;
+static bool timer_running = false;
 
 static int64_t last_led_flash_ms;
 
@@ -117,7 +119,7 @@ void heartbeat (void * p_event, uint16_t event_size)
     // Sensor read takes a long while, indicate activity once data is read.
     if ((last_led_flash_ms + 1950) < ri_rtc_millis()) {
         last_led_flash_ms = ri_rtc_millis();
-        app_led_activity_signal (true);
+        // app_led_activity_signal (true);
         err_code = send_adv (&msg);
         // Advertising should always be successful
         RD_ERROR_CHECK (err_code, ~RD_ERROR_FATAL);
@@ -157,6 +159,8 @@ void heartbeat (void * p_event, uint16_t event_size)
         last_heartbeat_timestamp_ms = ri_rtc_millis();
     }
 
+    last_hb_ms = ri_rtc_millis();
+
     // check_accel_is_active(&data);
     // uint32_t new_heartbeat_interval_ms;
     // if (gatt_active) {
@@ -173,7 +177,7 @@ void heartbeat (void * p_event, uint16_t event_size)
     // }
 
     // Turn LED off before starting lengthy flash operations
-    app_led_activity_signal (false);
+    // app_led_activity_signal (false);
     // err_code = app_log_process (&data);
     RD_ERROR_CHECK (err_code, ~RD_ERROR_FATAL);
 }
@@ -193,8 +197,10 @@ void schedule_heartbeat_isr (void * const p_context)
 
 rd_status_t app_heartbeat_set_gatt_interval_ms(uint32_t interval_ms) {
 
+    ri_timer_stop (heart_timer);
+    timer_running = false;
     heartbeat_gatt_interval_dynamic_ms = interval_ms;
-    heartbeat_gatt_live_until = 60000 + ri_rtc_millis();
+    heartbeat_gatt_live_until = 30000 + ri_rtc_millis();
     return RD_SUCCESS;
 }
 
@@ -203,8 +209,11 @@ rd_status_t app_heartbeat_init (void)
     rd_status_t err_code = RD_SUCCESS;
     heartbeat_interval_ms = APP_HEARTBEAT_INTERVAL_MS;
     heartbeat_gatt_interval_dynamic_ms = APP_HEARTBEAT_INTERVAL_MS;
+    timer_running = false;
+    last_hb_ms = ri_rtc_millis();
     last_accelerometer_active_time_ms = -1 * (1000 * 60 * 9);
     last_led_flash_ms = ri_rtc_millis();
+    heartbeat_gatt_live_until = ri_rtc_millis();
 
     if ( (!ri_timer_is_init()) || (!ri_scheduler_is_init()))
     {
@@ -217,6 +226,7 @@ rd_status_t app_heartbeat_init (void)
 
         if (RD_SUCCESS == err_code)
         {
+            timer_running = true;
             err_code |= ri_timer_start (heart_timer, heartbeat_interval_ms, NULL);
         }
     }
@@ -225,11 +235,27 @@ rd_status_t app_heartbeat_init (void)
 }
 
 bool app_heartbeat_should_sleep (void) {
-    if (heartbeat_gatt_live_until > ri_rtc_millis()) {
+    if (heartbeat_gatt_live_until < ri_rtc_millis()) {
+        if (!timer_running) {
+            ri_timer_start (heart_timer, heartbeat_interval_ms, NULL);
+            timer_running = true;
+        }
         return true;
-    } else {
-        heartbeat (NULL, 0);
     }
+    
+    if ((last_hb_ms + heartbeat_gatt_interval_dynamic_ms) < ri_rtc_millis())
+    {
+        // app_led_activity_signal (true);
+        heartbeat (NULL, 0);
+        // app_led_activity_signal (false);
+        // app_led_error_signal(false);
+    }
+    // else
+    // {
+    //     heartbeat (NULL, 0);
+    // }
+
+    return false;
 }
 
 rd_status_t app_heartbeat_start (void)
